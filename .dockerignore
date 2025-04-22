@@ -1,0 +1,18 @@
+# Ignore node_modules directory
+node_modules
+
+# Ignore temporary files
+temp
+
+# Ignore log files
+*.log
+
+# Ignore environment variable files
+.env
+
+# Ignore Dockerfile and related files
+Dockerfile
+.dockerignore
+
+# Ignore test files
+/tests/
