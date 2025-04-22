@@ -74,6 +74,91 @@ To run the tests, use:
 npm test
 ```
 
+## Example Usage
+
+### Python Example
+
+Here's an example of how to use this service from a Python script to generate and save diagram images:
+
+```python
+import requests
+import os
+
+def generate_mermaid_diagram(mermaid_syntax, output_file):
+    """
+    Generate a diagram image from Mermaid syntax using the conversion service.
+    
+    Args:
+        mermaid_syntax: String containing the Mermaid diagram code
+        output_file: Path where the output image will be saved
+    
+    Returns:
+        bool: True if successful, False otherwise
+    """
+    try:
+        # API endpoint
+        url = "http://localhost:3000/convert/image"
+        
+        # Request payload
+        payload = {
+            "mermaidSyntax": mermaid_syntax
+        }
+        
+        # Send POST request to the API
+        response = requests.post(url, json=payload)
+        
+        # Check if request was successful
+        if response.status_code == 200:
+            # Save the image to the output file
+            with open(output_file, 'wb') as f:
+                f.write(response.content)
+            print(f"Diagram successfully saved to {output_file}")
+            return True
+        else:
+            print(f"Error: API returned status code {response.status_code}")
+            print(f"Response: {response.text}")
+            return False
+            
+    except Exception as e:
+        print(f"Error generating diagram: {str(e)}")
+        return False
+
+# Example usage
+if __name__ == "__main__":
+    # Example flowchart
+    mermaid_code = """
+    graph TD
+        A[Start] --> B{Is it working?}
+        B -->|Yes| C[Great!]
+        B -->|No| D[Debug]
+        D --> B
+        C --> E[Deploy]
+    """
+    
+    generate_mermaid_diagram(mermaid_code, "flowchart.png")
+    
+    # Example sequence diagram
+    sequence_code = """
+    sequenceDiagram
+        participant User
+        participant API
+        participant Database
+        
+        User->>API: Request Data
+        API->>Database: Query
+        Database-->>API: Return Results
+        API-->>User: Formatted Response
+    """
+    
+    generate_mermaid_diagram(sequence_code, "sequence.png")
+```
+
+This Python script:
+1. Defines a function to send Mermaid syntax to the conversion service
+2. Sends the request with the diagram code
+3. Saves the returned image to a file
+4. Includes two examples: a flowchart and a sequence diagram
+
 ## License
 
 This project is licensed under the MIT License.
