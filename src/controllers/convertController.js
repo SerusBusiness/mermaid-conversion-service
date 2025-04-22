@@ -8,6 +8,9 @@ class ConvertController {
   async convertImage(req, res) {
     try {
       const mermaidCode = req.body.mermaidSyntax;
+      const width = req.body.width ? parseInt(req.body.width) : undefined;
+      const height = req.body.height ? parseInt(req.body.height) : undefined;
+      
       // logging the request body for debugging
       if (!this.silent) {
         this.logger.log(`Received request body: ${JSON.stringify(req.body)}`);
@@ -17,7 +20,7 @@ class ConvertController {
         return res.status(400).json({ error: 'Mermaid syntax is required' });
       }
 
-      const imageBuffer = await this.mermaidService.convertMermaidToImage(mermaidCode);
+      const imageBuffer = await this.mermaidService.convertMermaidToImage(mermaidCode, { width, height });
       res.set('Content-Type', 'image/png');
       res.send(imageBuffer);
     } catch (error) {

@@ -19,7 +19,7 @@ const mockLogger = {
 
 // Mock MermaidService
 const mockMermaidService = {
-  convertMermaidToImage: jest.fn().mockImplementation(mermaidCode => {
+  convertMermaidToImage: jest.fn().mockImplementation((mermaidCode, options = {}) => {
     if (!mermaidCode || mermaidCode.includes('invalid syntax')) {
       return Promise.reject(new Error('Invalid Mermaid syntax'));
     }
@@ -52,7 +52,7 @@ describe('POST /convert/image', () => {
     jest.clearAllMocks();
   });
 
-  it('should convert valid Mermaid syntax to an image', async () => {
+  it('should convert valid Mermaid syntax to an image with default dimensions', async () => {
     const mermaidSyntax = `
       graph TD;
       A-->B;
@@ -68,7 +68,63 @@ describe('POST /convert/image', () => {
 
     expect(response.status).toBe(200);
     expect(response.headers['content-type']).toMatch(/image\/png/);
-    expect(mockMermaidService.convertMermaidToImage).toHaveBeenCalledWith(mermaidSyntax);
+    expect(mockMermaidService.convertMermaidToImage).toHaveBeenCalledWith(mermaidSyntax, {});
+  });
+
+  it('should convert valid Mermaid syntax to an image with custom dimensions', async () => {
+    const mermaidSyntax = `
+      graph TD;
+      A-->B;
+      A-->C;
+      B-->D;
+      C-->D;
+    `;
+    const width = 1920;
+    const height = 1080;
+
+    const response = await request(app)
+      .post('/convert/image')
+      .send({ mermaidSyntax, width, height })
+      .set('Content-Type', 'application/json');
+
+    expect(response.status).toBe(200);
+    expect(response.headers['content-type']).toMatch(/image\/png/);
+    expect(mockMermaidService.convertMermaidToImage).toHaveBeenCalledWith(
+      mermaidSyntax,
+      { width, height }
+    );
+  });
+
+  it('should return 400 if width is invalid', async () => {
+    const mermaidSyntax = `
+      graph TD;
+      A-->B;
+    `;
+    
+    const response = await request(app)
+      .post('/convert/image')
+      .send({ mermaidSyntax, width: 'invalid' })
+      .set('Content-Type', 'application/json');
+
+    expect(response.status).toBe(400);
+    expect(response.body.errors).toBeDefined();
+    expect(mockMermaidService.convertMermaidToImage).not.toHaveBeenCalled();
+  });
+
+  it('should return 400 if height is out of range', async () => {
+    const mermaidSyntax = `
+      graph TD;
+      A-->B;
+    `;
+    
+    const response = await request(app)
+      .post('/convert/image')
+      .send({ mermaidSyntax, height: 50 }) // Too small (min is 100)
+      .set('Content-Type', 'application/json');
+
+    expect(response.status).toBe(400);
+    expect(response.body.errors).toBeDefined();
+    expect(mockMermaidService.convertMermaidToImage).not.toHaveBeenCalled();
   });
 
   it('should return 500 for invalid Mermaid syntax', async () => {

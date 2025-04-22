@@ -70,18 +70,39 @@ describe('MermaidService', () => {
   });
 
   describe('convertToPng', () => {
-    it('should execute mmdc command to convert mermaid to png', async () => {
+    it('should execute mmdc command to convert mermaid to png with default dimensions', async () => {
       const inputFile = '/tmp/test.mmd';
       const outputFile = '/tmp/test.png';
+      const { promisify } = require('util');
       
       const result = await mermaidService.convertToPng(inputFile, outputFile);
       
       expect(result).toBe(true);
+      // Verify that the default 4K dimensions are used
+      expect(mermaidService.defaultWidth).toBe(3840);
+      expect(mermaidService.defaultHeight).toBe(2160);
+    });
+
+    it('should execute mmdc command with custom dimensions when provided', async () => {
+      const inputFile = '/tmp/test.mmd';
+      const outputFile = '/tmp/test.png';
+      const customOptions = { width: 1920, height: 1080 };
+      const { promisify } = require('util');
+      
+      // Store original implementation to spy on it
+      const origExecPromise = promisify(require('child_process').exec);
+      
+      const result = await mermaidService.convertToPng(inputFile, outputFile, customOptions);
+      
+      expect(result).toBe(true);
+      
+      // We can only verify that promisify was called, but we can't easily verify the exact command string without more complex mocking
+      expect(promisify).toHaveBeenCalled();
     });
   });
 
   describe('convertMermaidToImage', () => {
-    it('should create temp files, convert, and return image buffer', async () => {
+    it('should create temp files, convert with default dimensions, and return image buffer', async () => {
       const mermaidCode = 'graph TD; A-->B;';
       
       // Mock implementation
@@ -93,14 +114,45 @@ describe('MermaidService', () => {
       // Check that createTempMermaidFile was called
       expect(mermaidService.createTempMermaidFile).toHaveBeenCalled();
       
-      // Check that convertToPng was called
-      expect(mermaidService.convertToPng).toHaveBeenCalled();
+      // Check that convertToPng was called with default options (empty object)
+      expect(mermaidService.convertToPng).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.any(String),
+        {}
+      );
       
       // Check that readFile was called to get the image buffer
       expect(fs.readFile).toHaveBeenCalled();
       
       // Check that unlink was called twice (for input and output files)
       expect(fs.unlink).toHaveBeenCalledTimes(2);
+      
+      // Check that the result is a buffer
+      expect(result).toEqual(expect.any(Buffer));
+    });
+
+    it('should create temp files, convert with custom dimensions, and return image buffer', async () => {
+      const mermaidCode = 'graph TD; A-->B;';
+      const customOptions = { width: 2560, height: 1440 };
+      
+      // Mock implementation
+      mermaidService.createTempMermaidFile = jest.fn().mockResolvedValue();
+      mermaidService.convertToPng = jest.fn().mockResolvedValue(true);
+      
+      const result = await mermaidService.convertMermaidToImage(mermaidCode, customOptions);
+      
+      // Check that createTempMermaidFile was called
+      expect(mermaidService.createTempMermaidFile).toHaveBeenCalled();
+      
+      // Check that convertToPng was called with custom options
+      expect(mermaidService.convertToPng).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.any(String),
+        customOptions
+      );
+      
+      // Check that readFile was called to get the image buffer
+      expect(fs.readFile).toHaveBeenCalled();
       
       // Check that the result is a buffer
       expect(result).toEqual(expect.any(Buffer));

@@ -5,6 +5,8 @@ This project is a Node.js microservice that provides a REST API for converting M
 ## Features
 
 - REST API endpoint `/convert/image` for converting Mermaid text syntax to PNG images.
+- High-resolution output (4K by default) for superior image quality.
+- Customizable canvas dimensions (width and height) for precise control over diagram size.
 - Middleware for error handling and request validation.
 - Temporary file management for handling Mermaid files during conversion.
 - Integration and unit tests to ensure the service functions correctly.
@@ -65,7 +67,29 @@ To start the server, run:
 npm start
 ```
 
-You can then send a POST request to `/convert/image` with the Mermaid syntax in the request body to receive the generated image.
+### API Endpoints
+
+#### Convert Mermaid to Image
+
+**Endpoint:** `POST /convert/image`
+
+**Request Body:**
+
+```json
+{
+  "mermaidSyntax": "Your mermaid diagram syntax here",
+  "width": 3840,       // Optional: Canvas width in pixels (default: 3840)
+  "height": 2160       // Optional: Canvas height in pixels (default: 2160)
+}
+```
+
+**Parameters:**
+- `mermaidSyntax` (required): The Mermaid diagram syntax as a string
+- `width` (optional): Custom width for the output image (100-10000 pixels)
+- `height` (optional): Custom height for the output image (100-10000 pixels)
+
+**Response:**
+- The generated PNG image with `Content-Type: image/png`
 
 ## Testing
 
@@ -84,13 +108,15 @@ Here's an example of how to use this service from a Python script to generate an
 import requests
 import os
 
-def generate_mermaid_diagram(mermaid_syntax, output_file):
+def generate_mermaid_diagram(mermaid_syntax, output_file, width=None, height=None):
     """
     Generate a diagram image from Mermaid syntax using the conversion service.
     
     Args:
         mermaid_syntax: String containing the Mermaid diagram code
         output_file: Path where the output image will be saved
+        width: Optional width in pixels (default: server's default 3840px)
+        height: Optional height in pixels (default: server's default 2160px)
     
     Returns:
         bool: True if successful, False otherwise
@@ -103,6 +129,12 @@ def generate_mermaid_diagram(mermaid_syntax, output_file):
         payload = {
             "mermaidSyntax": mermaid_syntax
         }
+        
+        # Add optional dimensions if provided
+        if width:
+            payload["width"] = width
+        if height:
+            payload["height"] = height
         
         # Send POST request to the API
         response = requests.post(url, json=payload)
@@ -135,9 +167,13 @@ if __name__ == "__main__":
         C --> E[Deploy]
     """
     
+    # Default high-resolution output (4K)
     generate_mermaid_diagram(mermaid_code, "flowchart.png")
     
-    # Example sequence diagram
+    # Custom dimensions (1920x1080)
+    generate_mermaid_diagram(mermaid_code, "flowchart_smaller.png", width=1920, height=1080)
+    
+    # Example sequence diagram with custom dimensions
     sequence_code = """
     sequenceDiagram
         participant User
@@ -150,14 +186,15 @@ if __name__ == "__main__":
         API-->>User: Formatted Response
     """
     
-    generate_mermaid_diagram(sequence_code, "sequence.png")
+    generate_mermaid_diagram(sequence_code, "sequence.png", width=2560, height=1440)
 ```
 
 This Python script:
 1. Defines a function to send Mermaid syntax to the conversion service
-2. Sends the request with the diagram code
-3. Saves the returned image to a file
-4. Includes two examples: a flowchart and a sequence diagram
+2. Allows specification of custom width and height
+3. Sends the request with the diagram code and optional dimensions
+4. Saves the returned image to a file
+5. Includes examples with both default and custom dimensions
 
 ## License
 
