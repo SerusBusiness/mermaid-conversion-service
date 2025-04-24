@@ -1,0 +1,3 @@
+@echo off
+echo Stopping all mermaid-conversion-service containers...
+docker-compose down

@@ -78,9 +78,9 @@ describe('MermaidService', () => {
       const result = await mermaidService.convertToPng(inputFile, outputFile);
       
       expect(result).toBe(true);
-      // Verify that the default 4K dimensions are used
-      expect(mermaidService.defaultWidth).toBe(3840);
-      expect(mermaidService.defaultHeight).toBe(2160);
+      // Verify that the default Full HD dimensions are used
+      expect(mermaidService.defaultWidth).toBe(1920);
+      expect(mermaidService.defaultHeight).toBe(1080);
     });
 
     it('should execute mmdc command with custom dimensions when provided', async () => {
@@ -167,6 +167,70 @@ describe('MermaidService', () => {
       
       await expect(mermaidService.convertMermaidToImage(mermaidCode))
         .rejects.toThrow('Failed to convert Mermaid diagram to PNG');
+    });
+  });
+
+  describe('fixGanttSyntax', () => {
+    it('should fix missing dateFormat in Gantt charts', async () => {
+      const ganttCode = 'gantt\n  title Test Gantt\n  section A\n  Task 1: a1, 2024-01-01, 30d';
+      const fixed = mermaidService.fixGanttSyntax(ganttCode);
+      
+      expect(fixed).toContain('dateFormat');
+    });
+    
+    it('should fix multiple after dependencies', async () => {
+      const ganttCode = 'gantt\n  title Test Gantt\n  dateFormat YYYY-MM-DD\n  section A\n  Task 1: a1, 2024-01-01, 30d\n  Task 2: a2, after a1, after b1, 20d';
+      const fixed = mermaidService.fixGanttSyntax(ganttCode);
+      
+      // Check that multiple "after" conditions are converted to the & syntax
+      expect(fixed).toContain('after a1 & b1');
+      expect(fixed).not.toContain('after a1, after b1');
+    });
+    
+    it('should add proper indentation to tasks', async () => {
+      const ganttCode = 'gantt\n  title Test Gantt\n  dateFormat YYYY-MM-DD\n  section A\nTask 1: a1, 2024-01-01, 30d';
+      const fixed = mermaidService.fixGanttSyntax(ganttCode);
+      
+      // Check that tasks have proper indentation
+      expect(fixed).toContain('    Task 1');
+    });
+  });
+
+  describe('renderGanttWithFallback', () => {
+    it('should attempt to render Gantt with fallback method', async () => {
+      // Mock the puppeteer and file system operations
+      const puppeteer = {
+        launch: jest.fn().mockResolvedValue({
+          newPage: jest.fn().mockResolvedValue({
+            setViewport: jest.fn().mockResolvedValue(),
+            goto: jest.fn().mockResolvedValue(),
+            waitForSelector: jest.fn().mockResolvedValue(),
+            waitForTimeout: jest.fn().mockResolvedValue(),
+            screenshot: jest.fn().mockResolvedValue(),
+          }),
+          close: jest.fn().mockResolvedValue()
+        })
+      };
+      
+      // Mock require for puppeteer
+      const originalRequire = global.require;
+      global.require = jest.fn((moduleName) => {
+        if (moduleName === 'puppeteer') return puppeteer;
+        return originalRequire(moduleName);
+      });
+      
+      const ganttCode = 'gantt\n  title Test Gantt\n  dateFormat YYYY-MM-DD\n  section A\n  Task 1: a1, 2024-01-01, 30d';
+      const outputFile = '/tmp/test.png';
+      
+      const result = await mermaidService.renderGanttWithFallback(ganttCode, outputFile, 1920, 1080);
+      
+      // Restore the original require
+      global.require = originalRequire;
+      
+      // Verify the result
+      expect(result).toBe(true);
+      expect(fs.writeFile).toHaveBeenCalled();
+      expect(fs.unlink).toHaveBeenCalled();
     });
   });
 });

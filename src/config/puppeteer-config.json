@@ -1,3 +1,21 @@
 {
-  "args": ["--no-sandbox", "--disable-setuid-sandbox"]
+  "args": [
+    "--no-sandbox", 
+    "--disable-setuid-sandbox", 
+    "--font-render-hinting=none", 
+    "--disable-features=site-per-process",
+    "--disable-web-security",
+    "--allow-file-access-from-files",
+    "--disable-dev-shm-usage",
+    "--disable-gpu",
+    "--ignore-certificate-errors"
+  ],
+  "defaultViewport": {
+    "width": 1920, 
+    "height": 1080,
+    "deviceScaleFactor": 1
+  },
+  "timeout": 120000,
+  "headless": "new",
+  "ignoreHTTPSErrors": true
 }

@@ -1,0 +1,68 @@
+services:
+  # Development service configuration with hot-reloading (Node.js)
+  mermaid-service-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    image: mermaid-conversion-service-dev
+    container_name: mermaid-conversion-service-dev
+    ports:
+      - "3000:3000"
+      - "9229:9229" # Expose debug port
+    volumes:
+      - ./src:/usr/src/app/src
+      - ./temp:/usr/src/app/temp
+      - ./package.json:/usr/src/app/package.json
+    environment:
+      - NODE_ENV=development
+    command: npm run dev
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # Bun development service for even faster hot-reloading
+  mermaid-service-bun:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    image: mermaid-conversion-service-bun
+    container_name: mermaid-conversion-service-bun
+    ports:
+      - "3000:3000"
+      - "9229:9229" # Expose debug port
+    volumes:
+      - ./src:/usr/src/app/src
+      - ./temp:/usr/src/app/temp
+      - ./package.json:/usr/src/app/package.json
+      - ./bun.lockb:/usr/src/app/bun.lockb
+    environment:
+      - NODE_ENV=development
+    command: bun run dev:bun
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 3
+
+  # Production service configuration
+  mermaid-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: mermaid-conversion-service
+    container_name: mermaid-conversion-service
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+    command: npm start
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3

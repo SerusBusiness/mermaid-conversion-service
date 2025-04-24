@@ -1,0 +1,3 @@
+@echo off
+echo Starting mermaid-conversion-service in production mode...
+docker-compose up -d --build mermaid-service

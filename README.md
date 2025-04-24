@@ -10,6 +10,8 @@ This project is a Node.js microservice that provides a REST API for converting M
 - Middleware for error handling and request validation.
 - Temporary file management for handling Mermaid files during conversion.
 - Integration and unit tests to ensure the service functions correctly.
+- Docker development environment with hot-reloading for real-time updates.
+- Support for international characters including Thai language in diagrams.
 
 ## Project Structure
 
@@ -38,9 +40,13 @@ mermaid-conversion-service
 │   └── unit
 │       └── mermaidService.test.js # Unit tests for the Mermaid service
 ├── .dockerignore                # Files to ignore in Docker builds
-├── .env.example                 # Example environment variables
+├── docker-compose.yml           # Docker Compose configuration for development and production
+├── Dockerfile                   # Instructions for building the Docker image for production
+├── Dockerfile.dev               # Instructions for building the Docker image for development
+├── start-dev.bat                # Script to start the service in development mode
+├── start-prod.bat               # Script to start the service in production mode
+├── stop-all.bat                 # Script to stop all running containers
 ├── .gitignore                   # Files to ignore in Git
-├── Dockerfile                   # Instructions for building the Docker image
 ├── package.json                 # NPM configuration file
 └── README.md                    # Project documentation
 ```
@@ -60,9 +66,34 @@ mermaid-conversion-service
 
 3. Set up environment variables by copying `.env.example` to `.env` and modifying as needed.
 
-## Usage
+## Running with Docker
 
-To start the server, run:
+### Development Mode (with Hot-Reloading)
+
+To start the service in development mode with hot-reloading:
+```
+start-dev.bat
+```
+
+This mode automatically restarts the server whenever you make changes to the source code, making development much faster and more efficient.
+
+### Production Mode
+
+To start the service in production mode:
+```
+start-prod.bat
+```
+
+### Stopping the Service
+
+To stop all running containers:
+```
+stop-all.bat
+```
+
+## Manual Usage
+
+To start the server without Docker, run:
 ```
 npm start
 ```
@@ -189,12 +220,30 @@ if __name__ == "__main__":
     generate_mermaid_diagram(sequence_code, "sequence.png", width=2560, height=1440)
 ```
 
-This Python script:
-1. Defines a function to send Mermaid syntax to the conversion service
-2. Allows specification of custom width and height
-3. Sends the request with the diagram code and optional dimensions
-4. Saves the returned image to a file
-5. Includes examples with both default and custom dimensions
+### Thai Language Support Example
+
+This service supports international characters including Thai language in diagrams. Here's an example:
+
+```python
+# Thai language Gantt chart example
+thai_gantt_code = """
+gantt
+    title ปฏิทินพลัง 30 วัน (23 เม.ย. - 22 พ.ค. 2568)
+    dateFormat  YYYY-MM-DD
+    axisFormat  %d/%m
+    todayMarker stroke-width:4px,stroke:#f88,opacity:0.5
+
+    section ช่วงที่ 1: สังเกตหัวใจ
+    23 เม.ย. - พลังลึกในใจ ฟังตัวเอง :active, a1, 2025-04-23, 1d
+    24 เม.ย. - อารมณ์หวือหวา :a2, 2025-04-24, 1d
+    
+    section ช่วงที่ 2: วางแผนใหม่
+    1 พ.ค. - วางแผน ตั้งเป้าหมาย :b1, 2025-05-01, 1d
+    2 พ.ค. - พลังสื่อสารดี :b2, 2025-05-02, 1d
+"""
+
+generate_mermaid_diagram(thai_gantt_code, "thai_gantt.png", width=2560, height=1440)
+```
 
 ## License
 

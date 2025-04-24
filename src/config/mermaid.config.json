@@ -1,0 +1,54 @@
+{
+  "theme": "default",
+  "themeVariables": {
+    "primaryColor": "#4682B4",
+    "primaryTextColor": "#fff",
+    "primaryBorderColor": "#325B7A",
+    "lineColor": "#555",
+    "secondaryColor": "#6AA8D9",
+    "tertiaryColor": "#f8f9fa",
+    
+    "classText": "#000000",
+    "classTitleText": "#000000",
+    "classStroke": "#999",
+    "classBackground": "#fff",
+    
+    "nodeBorder": "#000000",
+    "nodeTextColor": "#000000"
+  },
+  "startOnLoad": true,
+  "securityLevel": "loose",
+  "fontFamily": "Arial, sans-serif",
+  "fontSize": 16,
+  "logLevel": "fatal",
+  "sequence": {
+    "diagramMarginX": 50,
+    "diagramMarginY": 10,
+    "actorMargin": 50,
+    "width": 150,
+    "height": 65,
+    "boxMargin": 10,
+    "boxTextMargin": 5,
+    "noteMargin": 10,
+    "messageMargin": 35
+  },
+  "gantt": {
+    "fontSize": 14,
+    "sectionFontSize": 16,
+    "numberSectionStyles": 3,
+    "axisFormat": "%Y-%m-%d"
+  },
+  "flowchart": {
+    "diagramPadding": 8,
+    "htmlLabels": true
+  },
+  "classDiagram": {
+    "useMaxWidth": false,
+    "diagramPadding": 20,
+    "textHeight": 22,
+    "defaultRenderer": "dagre-wrapper"
+  },
+  "plugin": {
+    "loadZenuml": false
+  }
+}
