@@ -192,10 +192,12 @@ class MermaidService {
     let nodeCount = 0;
     let connectionCount = 0;
     let isWide = false;
+    let isTall = false;
     
     // Check flowchart orientation
     if (isFlowchart) {
       isWide = mermaidCode.includes('LR') || mermaidCode.includes('RL');
+      isTall = mermaidCode.includes('TD') || mermaidCode.includes('BT');
       
       // Count nodes and connections
       for (const line of lines) {
@@ -216,25 +218,58 @@ class MermaidService {
         width = Math.max(width, 2560); // Minimum 2.5K width
         height = width / targetAspectRatio;
       }
-      // For TD flowcharts with many nodes, increase height
-      else if (!isWide && nodeCount > 15) {
+      // For very tall TD flowcharts with many nodes, use a taller aspect ratio
+      else if (isTall && nodeCount > 20) {
+        targetAspectRatio = 9/24; // Extra tall ratio (1:2.67)
+        height = Math.max(height, 4320); // Very tall height
+        width = height * targetAspectRatio;
+      }
+      // For moderately tall TD flowcharts
+      else if (isTall && nodeCount > 15) {
         targetAspectRatio = 9/16; // Inverse of 16:9 for tall charts
         height = Math.max(height, 2160); // Minimum 4K height
         width = height * targetAspectRatio;
       }
     }
     
-    // Special handling for specific diagrams (Gantt charts are typically wide)
-    if (isGantt) {
-      targetAspectRatio = 3/1; // 3:1 for Gantt charts
-      width = Math.max(width, 3200); // Wider default for Gantt
-      height = width / targetAspectRatio;
+    // Check for deep nesting which suggests a tall diagram
+    const nestingLevel = this.estimateNestingLevel(mermaidCode);
+    if (nestingLevel > 4) {
+      targetAspectRatio = Math.max(9/16, 9/(16 + nestingLevel));
+      height = Math.max(height, 1080 + (nestingLevel * 200)); // Increase height based on nesting
+      width = height * targetAspectRatio;
     }
     
-    // For sequence diagrams, adjust based on the number of actors
+    // Special handling for specific diagrams (Gantt charts are typically wide)
+    if (isGantt) {
+      // Count timeline entries to determine if it's a tall Gantt chart
+      const timelineEntries = lines.filter(line => line.match(/:\s*\w+,/)).length;
+      
+      if (timelineEntries > 15) {
+        // For very tall Gantt charts with many entries
+        targetAspectRatio = 2/3; // 2:3 for tall Gantt charts
+        height = Math.max(height, 3200); // Taller for many entries
+        width = height * targetAspectRatio;
+      } else {
+        // Default wide Gantt chart
+        targetAspectRatio = 3/1; // 3:1 for Gantt charts
+        width = Math.max(width, 3200); // Wider default for Gantt
+        height = width / targetAspectRatio;
+      }
+    }
+    
+    // For sequence diagrams, adjust based on the number of actors and message count
     if (isSequence) {
       const actorCount = lines.filter(line => line.includes('participant') || line.includes('actor')).length;
-      if (actorCount > 5) {
+      const messageCount = lines.filter(line => line.includes('->') || line.includes('-->') || line.includes('->>') || line.includes('-->>') || line.includes('<-') || line.includes('<--')).length;
+      
+      if (actorCount <= 5 && messageCount > 15) {
+        // Tall sequence diagram (few actors but many messages)
+        targetAspectRatio = 2/3; // 2:3 ratio for tall sequence diagrams
+        height = Math.max(height, 2560); // Taller for many messages
+        width = height * targetAspectRatio;
+      } else if (actorCount > 5) {
+        // Wide sequence diagram (many actors)
         targetAspectRatio = 2/1; // 2:1 for sequence diagrams with many actors
         width = Math.max(width, 2560); // Wider for many actors
         height = width / targetAspectRatio;
@@ -255,7 +290,41 @@ class MermaidService {
       scaleFactor = 2.5;
     }
     
+    // For extremely tall diagrams, boost scale factor for better legibility
+    if (height > width * 1.5) {
+      scaleFactor = Math.min(3.0, scaleFactor + 0.5);
+    }
+    
     return { width, height, scaleFactor };
+  }
+  
+  // Helper method to estimate nesting level in diagrams
+  estimateNestingLevel(mermaidCode) {
+    const lines = mermaidCode.split('\n');
+    let maxNestingLevel = 0;
+    let currentNestingLevel = 0;
+    
+    for (const line of lines) {
+      // Count subgraph/section starts
+      if (line.includes('subgraph') || line.includes('section')) {
+        currentNestingLevel++;
+        maxNestingLevel = Math.max(maxNestingLevel, currentNestingLevel);
+      }
+      
+      // Count subgraph/section ends
+      if (line.includes('end') && currentNestingLevel > 0) {
+        currentNestingLevel--;
+      }
+      
+      // Count indentation level as a fallback
+      const indentationMatch = line.match(/^\s+/);
+      if (indentationMatch) {
+        const indentationLevel = Math.floor(indentationMatch[0].length / 2);
+        maxNestingLevel = Math.max(maxNestingLevel, indentationLevel);
+      }
+    }
+    
+    return maxNestingLevel;
   }
 
   async convertToPng(inputFile, outputFile, options = {}) {

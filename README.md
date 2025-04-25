@@ -137,16 +137,24 @@ To run the tests, use:
 npm test
 ```
 
-## Wide Diagram Optimization
+## Diagram Aspect Ratio Optimization
 
-This service includes specialized handling for diagrams with extreme aspect ratios (very wide or very tall), particularly optimized for:
+This service includes specialized handling for diagrams with extreme aspect ratios (very wide or very tall), optimized for:
 
+### Wide Diagram Optimization
 - Flowcharts with many nodes on the same level (TD orientation)
 - Wide flowcharts with LR (left-to-right) orientation
 - Diagrams with width-to-height ratios greater than 2.5
 
+### Tall Diagram Optimization
+- Deep hierarchical TD or BT flowcharts with many vertical levels
+- Sequence diagrams with few actors but many messages
+- Gantt charts with numerous timeline entries
+- Diagrams with height-to-width ratios greater than 1.5
+- Diagrams with deep nesting levels (subgraphs, sections)
+
 The system automatically:
-1. Detects diagram orientation and complexity
+1. Detects diagram orientation, complexity and nesting level
 2. Adjusts rendering dimensions for optimal clarity
 3. Increases scale factor for high pixel density
 4. Optimizes node spacing and layout parameters
@@ -157,6 +165,14 @@ For wide diagrams with a ratio like 10:1 (e.g., 3824×362 pixels), the service w
 - Apply a higher scale factor (2.5) for better text legibility
 - Adjust node spacing for better fit in wide layouts
 - Use special renderer configurations to improve clarity
+
+### Example of Tall Diagram Configuration
+
+For very tall diagrams with a ratio like 1:2.67 (e.g., 1620×4320 pixels), the service will:
+- Increase the vertical space allocation
+- Boost scale factor (up to 3.0) for better text legibility
+- Optimize vertical spacing between nodes
+- Adjust canvas proportions based on detected nesting level
 
 ## Example Usage
 
