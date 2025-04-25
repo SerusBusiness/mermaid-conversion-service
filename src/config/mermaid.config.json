@@ -40,7 +40,11 @@
   },
   "flowchart": {
     "diagramPadding": 8,
-    "htmlLabels": true
+    "htmlLabels": true,
+    "curve": "basis",
+    "nodeSpacing": 60,
+    "rankSpacing": 80,
+    "padding": 15
   },
   "classDiagram": {
     "useMaxWidth": false,
@@ -50,5 +54,14 @@
   },
   "plugin": {
     "loadZenuml": false
-  }
+  },
+  "er": {
+    "diagramPadding": 20
+  },
+  "useMaxWidth": false,
+  "maxTextSize": 5000,
+  "deterministicIds": false,
+  "highResolution": true,
+  "renderOptimize": true,
+  "defaultRenderer": "dagre-wrapper"
 }

@@ -17,6 +17,15 @@ class MermaidService {
     this.defaultWidth = 1920;  // Full HD width
     this.defaultHeight = 1080; // Full HD height
     
+    // Default scale factor for high resolution rendering
+    this.defaultScaleFactor = 2.0; // Higher value = better quality but larger file size
+    
+    // Min/max values to prevent extreme resolutions that might cause rendering issues
+    this.minWidth = 800;
+    this.maxWidth = 8000;
+    this.minHeight = 400;
+    this.maxHeight = 8000;
+    
     // Initialize cache helper with the same logging options
     this.cacheHelper = new CacheHelper({
       silent: this.silent,
@@ -70,7 +79,57 @@ class MermaidService {
       cleaned = cleaned.replace(/<--/g, ' <-- ');  // Fix arrows
     }
     
+    // Add high-resolution configuration for flowcharts
+    if (cleaned.trim().startsWith('flowchart')) {
+      cleaned = this.optimizeFlowchartSyntax(cleaned);
+    }
+    
     return cleaned;
+  }
+  
+  // New method to optimize flowcharts for better resolution and wide charts
+  optimizeFlowchartSyntax(flowchartCode) {
+    // Don't modify if user has specified configuration params
+    if (flowchartCode.includes('%%{init:')) {
+      return flowchartCode;
+    }
+    
+    // Determine if this is likely a wide flowchart by looking for many nodes on the same level
+    const lines = flowchartCode.split('\n');
+    let nodeCount = 0;
+    let levelIndicators = 0;
+    
+    // Count nodes and level indicators to estimate flowchart shape
+    for (const line of lines) {
+      if (line.includes('-->') || line.includes('---')) nodeCount++;
+      if (line.includes('TD') || line.includes('LR')) {
+        // If wide flowchart (LR) or potentially complex TD flowchart
+        levelIndicators = line.includes('LR') ? 2 : 1;
+      }
+    }
+    
+    // Determine if this is likely a wide flowchart (more than 10 nodes or explicit LR direction)
+    const isWideFlowchart = levelIndicators === 2 || nodeCount > 10;
+    
+    // Add optimal configuration header based on flowchart type
+    const configHeader = `%%{init: {
+  'flowchart': {
+    'curve': 'basis',
+    'diagramPadding': 10,
+    'nodeSpacing': ${isWideFlowchart ? 40 : 60},
+    'rankSpacing': ${isWideFlowchart ? 60 : 80},
+    'padding': 15
+  },
+  'themeVariables': {
+    'fontSize': 14,
+    'fontFamily': 'Arial, sans-serif'
+  },
+  'useMaxWidth': false,
+  'highResolution': true,
+  'renderOptimize': true
+}}%%\n`;
+    
+    return configHeader + flowchartCode;
   }
   
   // Special function to fix Gantt chart syntax
@@ -114,37 +173,124 @@ class MermaidService {
     return lines.join('\n');
   }
 
+  // Calculate optimal dimensions based on diagram type and content
+  calculateOptimalDimensions(mermaidCode, requestedWidth, requestedHeight) {
+    // Start with the requested dimensions or defaults
+    let width = requestedWidth || this.defaultWidth;
+    let height = requestedHeight || this.defaultHeight;
+    
+    // Default aspect ratio (16:9)
+    let targetAspectRatio = 16/9;
+    
+    // Identify diagram type
+    const isFlowchart = mermaidCode.trim().startsWith('flowchart') || mermaidCode.trim().startsWith('graph');
+    const isGantt = mermaidCode.trim().startsWith('gantt');
+    const isSequence = mermaidCode.trim().startsWith('sequenceDiagram');
+    
+    // Estimate diagram complexity by counting nodes and connections
+    const lines = mermaidCode.split('\n');
+    let nodeCount = 0;
+    let connectionCount = 0;
+    let isWide = false;
+    
+    // Check flowchart orientation
+    if (isFlowchart) {
+      isWide = mermaidCode.includes('LR') || mermaidCode.includes('RL');
+      
+      // Count nodes and connections
+      for (const line of lines) {
+        if (line.includes('-->') || line.includes('---')) connectionCount++;
+        if (line.match(/\[.*?\]/)) nodeCount++;
+        if (line.match(/\(.*?\)/)) nodeCount++;
+      }
+      
+      // For very wide flowcharts with many nodes, use a wider aspect ratio
+      if (isWide && nodeCount > 15) {
+        targetAspectRatio = 4/1; // 4:1 for very wide charts
+        width = Math.max(width, 3840); // Minimum 4K width for complex wide charts
+        height = width / targetAspectRatio;
+      }
+      // For moderately wide flowcharts
+      else if (isWide && nodeCount > 8) {
+        targetAspectRatio = 3/1; // 3:1 for moderately wide charts
+        width = Math.max(width, 2560); // Minimum 2.5K width
+        height = width / targetAspectRatio;
+      }
+      // For TD flowcharts with many nodes, increase height
+      else if (!isWide && nodeCount > 15) {
+        targetAspectRatio = 9/16; // Inverse of 16:9 for tall charts
+        height = Math.max(height, 2160); // Minimum 4K height
+        width = height * targetAspectRatio;
+      }
+    }
+    
+    // Special handling for specific diagrams (Gantt charts are typically wide)
+    if (isGantt) {
+      targetAspectRatio = 3/1; // 3:1 for Gantt charts
+      width = Math.max(width, 3200); // Wider default for Gantt
+      height = width / targetAspectRatio;
+    }
+    
+    // For sequence diagrams, adjust based on the number of actors
+    if (isSequence) {
+      const actorCount = lines.filter(line => line.includes('participant') || line.includes('actor')).length;
+      if (actorCount > 5) {
+        targetAspectRatio = 2/1; // 2:1 for sequence diagrams with many actors
+        width = Math.max(width, 2560); // Wider for many actors
+        height = width / targetAspectRatio;
+      }
+    }
+    
+    // Apply min/max constraints
+    width = Math.max(this.minWidth, Math.min(this.maxWidth, width));
+    height = Math.max(this.minHeight, Math.min(this.maxHeight, height));
+    
+    // Calculate scale factor based on complexity
+    let scaleFactor = this.defaultScaleFactor;
+    
+    // For very complex diagrams, increase scale factor further
+    if (nodeCount > 30 || connectionCount > 40) {
+      scaleFactor = 3.0;
+    } else if (nodeCount > 15 || connectionCount > 20) {
+      scaleFactor = 2.5;
+    }
+    
+    return { width, height, scaleFactor };
+  }
+
   async convertToPng(inputFile, outputFile, options = {}) {
     try {
-      // Use provided dimensions or fallback to defaults
-      const width = options.width || this.defaultWidth;
-      const height = options.height || this.defaultHeight;
+      // Read input file to determine diagram type and optimize dimensions
+      const inputContent = await fs.readFile(inputFile, 'utf-8');
+      
+      // Use optimal dimensions calculation
+      const { width, height, scaleFactor } = this.calculateOptimalDimensions(
+        inputContent, 
+        options.width, 
+        options.height
+      );
+      
+      // Use provided scale factor or the calculated one
+      const scale = options.scaleFactor || scaleFactor;
       
       // Reference to config files
       const puppeteerConfigPath = path.resolve(__dirname, '../config/puppeteer-config.json');
       const mermaidConfigPath = path.resolve(__dirname, '../config/mermaid.config.json');
       
-      // Read input file to check if it's a Gantt chart
-      const inputContent = await fs.readFile(inputFile, 'utf-8');
+      // Check if it's a Gantt chart or specific diagram type
       const isGanttChart = inputContent.trim().startsWith('gantt');
       
-      // Default command
-      let command = `npx mmdc -i "${inputFile}" -o "${outputFile}" -w ${width} -H ${height} -p "${puppeteerConfigPath}" -c "${mermaidConfigPath}" --backgroundColor "#ffffff"`;
-      
-      // For Gantt charts, use a specific version parameter if needed
-      if (isGanttChart) {
-        // Use a known-compatible mermaid version
-        command = `npx mmdc -i "${inputFile}" -o "${outputFile}" -w ${width} -H ${height} -p "${puppeteerConfigPath}" -c "${mermaidConfigPath}" --backgroundColor "#ffffff"`;
-      }
+      // Build command with optimal dimensions and quality settings
+      let command = `npx mmdc -i "${inputFile}" -o "${outputFile}" -w ${width} -H ${height} -p "${puppeteerConfigPath}" -c "${mermaidConfigPath}" --backgroundColor "#ffffff" --scale ${scale}`;
       
       if (!this.silent) {
         this.logger.log(`Converting ${inputFile} to ${outputFile}...`);
-        this.logger.log(`Using dimensions: ${width}x${height} pixels`);
+        this.logger.log(`Using dimensions: ${width}x${height} pixels with scale factor: ${scale}`);
         this.logger.debug(`Running command: ${command}`);
       }
       
       try {
-        const { stdout, stderr } = await execPromise(command, { timeout: 60000 });
+        const { stdout, stderr } = await execPromise(command, { timeout: 120000 }); // Higher timeout for complex diagrams
         
         if (stdout && !this.silent) this.logger.log(`Command output: ${stdout}`);
         if (stderr && !this.silent) this.logger.error(`Command error: ${stderr}`);
@@ -163,7 +309,7 @@ class MermaidService {
           
           // If this is a Gantt chart and standard approach failed, try the fallback method
           if (isGanttChart) {
-            return await this.renderGanttWithFallback(inputContent, outputFile, width, height);
+            return await this.renderGanttWithFallback(inputContent, outputFile, width, height, scale);
           }
           
           return false;
@@ -175,7 +321,7 @@ class MermaidService {
         
         // If this is a Gantt chart and standard approach failed, try the fallback method
         if (isGanttChart) {
-          return await this.renderGanttWithFallback(inputContent, outputFile, width, height);
+          return await this.renderGanttWithFallback(inputContent, outputFile, width, height, scale);
         }
         
         return false;
@@ -203,7 +349,7 @@ class MermaidService {
   }
   
   // Fallback method for rendering Gantt charts if the standard approach fails
-  async renderGanttWithFallback(ganttCode, outputFile, width, height) {
+  async renderGanttWithFallback(ganttCode, outputFile, width, height, scale = 2) {
     this.logger.log("Using fallback method for Gantt chart rendering");
     
     try {
@@ -254,7 +400,9 @@ ${ganttCode}
       gantt: {
         axisFormat: '%Y-%m-%d',
         fontSize: 14
-      }
+      },
+      useMaxWidth: false,
+      highResolution: true
     });
   </script>
 </body>
@@ -271,7 +419,11 @@ ${ganttCode}
         });
         
         const page = await browser.newPage();
-        await page.setViewport({ width, height });
+        await page.setViewport({ 
+          width: Math.round(width), 
+          height: Math.round(height),
+          deviceScaleFactor: scale // Use scale factor for high DPI rendering
+        });
         
         // Load the HTML file
         await page.goto(`file://${htmlFilePath}`, { waitUntil: 'networkidle0' });
@@ -282,8 +434,12 @@ ${ganttCode}
         // Wait a bit more to ensure everything is rendered
         await page.waitForTimeout(1000);
         
-        // Take screenshot
-        await page.screenshot({ path: outputFile, omitBackground: true });
+        // Take screenshot with high quality settings
+        await page.screenshot({ 
+          path: outputFile, 
+          omitBackground: true,
+          quality: 100 // Maximum quality for PNG
+        });
         
         await browser.close();
         
@@ -297,7 +453,7 @@ ${ganttCode}
         
         // Try with mmdc as a last resort
         try {
-          const simpleCommand = `npx mmdc -i "${htmlFilePath}" -o "${outputFile}" -w ${width} -H ${height} --backgroundColor "#ffffff"`;
+          const simpleCommand = `npx mmdc -i "${htmlFilePath}" -o "${outputFile}" -w ${width} -H ${height} --backgroundColor "#ffffff" --scale ${scale}`;
           
           await execPromise(simpleCommand, { timeout: 60000 });
           await fs.unlink(htmlFilePath).catch(() => {});

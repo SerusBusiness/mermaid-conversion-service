@@ -7,6 +7,9 @@ This project is a Node.js microservice that provides a REST API for converting M
 - REST API endpoint `/convert/image` for converting Mermaid text syntax to PNG images.
 - High-resolution output (4K by default) for superior image quality.
 - Customizable canvas dimensions (width and height) for precise control over diagram size.
+- Smart scaling for wide/narrow diagrams with optimized aspect ratio handling.
+- Automatic detection and optimization of wide flowcharts for better resolution.
+- Scale factor support for adjusting pixel density and image quality.
 - Middleware for error handling and request validation.
 - Temporary file management for handling Mermaid files during conversion.
 - Integration and unit tests to ensure the service functions correctly.
@@ -109,18 +112,23 @@ npm start
 ```json
 {
   "mermaidSyntax": "Your mermaid diagram syntax here",
-  "width": 3840,       // Optional: Canvas width in pixels (default: 3840)
-  "height": 2160       // Optional: Canvas height in pixels (default: 2160)
+  "width": 3840,       // Optional: Canvas width in pixels (default: 1920)
+  "height": 2160,      // Optional: Canvas height in pixels (default: 1080)
+  "scaleFactor": 2.0   // Optional: Quality multiplier for higher resolution (default: 2.0)
 }
 ```
 
 **Parameters:**
 - `mermaidSyntax` (required): The Mermaid diagram syntax as a string
-- `width` (optional): Custom width for the output image (100-10000 pixels)
-- `height` (optional): Custom height for the output image (100-10000 pixels)
+- `width` (optional): Custom width for the output image (800-8000 pixels)
+- `height` (optional): Custom height for the output image (400-8000 pixels)
+- `scaleFactor` (optional): Pixel density multiplier for higher resolution (1.0-3.0)
 
 **Response:**
 - The generated PNG image with `Content-Type: image/png`
+- Response headers:
+  - `X-Diagram-Type`: Type of diagram that was rendered
+  - `X-Rendering-Options`: JSON string with the actual rendering options used
 
 ## Testing
 
@@ -128,6 +136,27 @@ To run the tests, use:
 ```
 npm test
 ```
+
+## Wide Diagram Optimization
+
+This service includes specialized handling for diagrams with extreme aspect ratios (very wide or very tall), particularly optimized for:
+
+- Flowcharts with many nodes on the same level (TD orientation)
+- Wide flowcharts with LR (left-to-right) orientation
+- Diagrams with width-to-height ratios greater than 2.5
+
+The system automatically:
+1. Detects diagram orientation and complexity
+2. Adjusts rendering dimensions for optimal clarity
+3. Increases scale factor for high pixel density
+4. Optimizes node spacing and layout parameters
+
+### Example of Wide Diagram Configuration
+
+For wide diagrams with a ratio like 10:1 (e.g., 3824×362 pixels), the service will:
+- Apply a higher scale factor (2.5) for better text legibility
+- Adjust node spacing for better fit in wide layouts
+- Use special renderer configurations to improve clarity
 
 ## Example Usage
 
@@ -139,15 +168,16 @@ Here's an example of how to use this service from a Python script to generate an
 import requests
 import os
 
-def generate_mermaid_diagram(mermaid_syntax, output_file, width=None, height=None):
+def generate_mermaid_diagram(mermaid_syntax, output_file, width=None, height=None, scale_factor=None):
     """
     Generate a diagram image from Mermaid syntax using the conversion service.
     
     Args:
         mermaid_syntax: String containing the Mermaid diagram code
         output_file: Path where the output image will be saved
-        width: Optional width in pixels (default: server's default 3840px)
-        height: Optional height in pixels (default: server's default 2160px)
+        width: Optional width in pixels (default: server's default 1920px)
+        height: Optional height in pixels (default: server's default 1080px)
+        scale_factor: Optional quality multiplier (default: server's default 2.0)
     
     Returns:
         bool: True if successful, False otherwise
@@ -161,11 +191,13 @@ def generate_mermaid_diagram(mermaid_syntax, output_file, width=None, height=Non
             "mermaidSyntax": mermaid_syntax
         }
         
-        # Add optional dimensions if provided
+        # Add optional parameters if provided
         if width:
             payload["width"] = width
         if height:
             payload["height"] = height
+        if scale_factor:
+            payload["scaleFactor"] = scale_factor
         
         # Send POST request to the API
         response = requests.post(url, json=payload)
@@ -176,6 +208,12 @@ def generate_mermaid_diagram(mermaid_syntax, output_file, width=None, height=Non
             with open(output_file, 'wb') as f:
                 f.write(response.content)
             print(f"Diagram successfully saved to {output_file}")
+            
+            # Display information about how it was rendered
+            diagram_type = response.headers.get('X-Diagram-Type', 'unknown')
+            rendering_options = response.headers.get('X-Rendering-Options', '{}')
+            print(f"Diagram type: {diagram_type}")
+            print(f"Rendering options: {rendering_options}")
             return True
         else:
             print(f"Error: API returned status code {response.status_code}")
@@ -198,11 +236,80 @@ if __name__ == "__main__":
         C --> E[Deploy]
     """
     
-    # Default high-resolution output (4K)
+    # Default high-resolution output
     generate_mermaid_diagram(mermaid_code, "flowchart.png")
     
-    # Custom dimensions (1920x1080)
-    generate_mermaid_diagram(mermaid_code, "flowchart_smaller.png", width=1920, height=1080)
+    # Custom dimensions with enhanced scale factor
+    generate_mermaid_diagram(mermaid_code, "flowchart_hires.png", width=1920, height=1080, scale_factor=3.0)
+    
+    # Example of a wide flowchart with optimized rendering
+    wide_flowchart_code = """
+    flowchart TD
+        Root[SiamAI Travel Agent] --> App
+        Root --> Templates
+        Root --> Diagrams
+        Root --> Docker
+        Root --> Tests
+        Root --> Logs
+        Root --> Main
+        Root --> Readme
+        Root --> Requirements
+        
+        App --> Agents
+        App --> API
+        App --> Frontend
+        App --> Graph
+        App --> Models
+        App --> Tools
+        App --> Utils
+        
+        Agents --> BaseAgent[base_agent.py]
+        Agents --> SupervisorAgent[supervisor_agent.py <br> System oversight]
+        Agents --> PlannerAgent[planner_agent.py <br> Centralized coordinator]
+        Agents --> WebSurferAgent[web_surfer_agent.py]
+        Agents --> HotelSearchAgent[hotel_search_agent.py]
+        Agents --> FlightSearchAgent[flight_search_agent.py]
+        Agents --> TourPlannerAgent[tour_planner_agent.py]
+        Agents --> ResponseAgent[response_agent.py]
+        
+        Graph --> Orchestrator[orchestrator.py]
+        Models --> Schemas[schemas.py]
+        
+        Tools --> SearchTools[search_tools.py]
+        Tools --> MemoryTools[memory_tools.py]
+        MemoryTools --> Preferences[User Preferences]
+        MemoryTools --> TravelHistory[Travel History]
+        MemoryTools --> Facts[Memorable Facts]
+        
+        Utils --> LLMUtils[llm_utils.py]
+        Utils --> LoggingUtils[logging_utils.py]
+        Utils --> LanguageUtils[language_utils.py]
+        Utils --> ModelProvider[model_provider.py]
+        
+        API --> MainAPI[main.py]
+        Templates --> Index[index.html]
+        
+        Tests --> Conftest[conftest.py]
+        Tests --> UnitTests[unit]
+        UnitTests --> AgentTests[Agent tests]
+        UnitTests --> ToolTests[Tool tests]
+        UnitTests --> OrchestratorTest[Orchestrator test]
+        
+        classDef primary fill:#f9f,stroke:#333,stroke-width:2px
+        classDef secondary fill:#bbf,stroke:#333,stroke-width:1px
+        classDef supervisor fill:#fd5,stroke:#333,stroke-width:2px
+        classDef planner fill:#f96,stroke:#333,stroke-width:2px
+        classDef memory fill:#e9d,stroke:#333,stroke-width:1px
+        
+        class Root primary
+        class App,Agents,API,Frontend,Graph,Models,Tools,Utils,Tests secondary
+        class SupervisorAgent supervisor
+        class PlannerAgent planner
+        class MemoryTools,Preferences,TravelHistory,Facts memory
+    """
+    
+    # Generate the wide diagram with optimized settings
+    generate_mermaid_diagram(wide_flowchart_code, "wide_flowchart.png", width=3824, height=362, scale_factor=2.5)
     
     # Example sequence diagram with custom dimensions
     sequence_code = """

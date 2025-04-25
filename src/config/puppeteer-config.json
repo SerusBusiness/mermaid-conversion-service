@@ -7,15 +7,15 @@
     "--disable-web-security",
     "--allow-file-access-from-files",
     "--disable-dev-shm-usage",
-    "--disable-gpu",
+    "--enable-gpu",
     "--ignore-certificate-errors"
   ],
   "defaultViewport": {
     "width": 1920, 
     "height": 1080,
-    "deviceScaleFactor": 1
+    "deviceScaleFactor": 2
   },
-  "timeout": 120000,
+  "timeout": 180000,
   "headless": "new",
   "ignoreHTTPSErrors": true
 }
