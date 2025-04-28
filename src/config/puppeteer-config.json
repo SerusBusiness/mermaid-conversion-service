@@ -15,7 +15,8 @@
     "height": 1080,
     "deviceScaleFactor": 2
   },
-  "timeout": 180000,
+  "timeout": 300000,
+  "waitingTimeout": 30000,
   "headless": "new",
   "ignoreHTTPSErrors": true
 }

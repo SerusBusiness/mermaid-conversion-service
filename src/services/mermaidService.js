@@ -67,6 +67,14 @@ class MermaidService {
     // Remove any extra spaces in the middle of task definitions
     cleaned = cleaned.replace(/(\w+)\s+,\s+(\w+)/g, '$1, $2');
     
+    // Detect if this is a ZenUML diagram
+    if (cleaned.trim().startsWith('@startuml') || 
+        cleaned.trim().match(/^zenuml\b/) || 
+        cleaned.trim().match(/^sequenceDiagram\s+participant/) ||
+        cleaned.trim().includes('ZenUML')) {
+      cleaned = this.optimizeZenUmlSyntax(cleaned);
+    }
+    
     // Special handling for Gantt charts
     if (cleaned.trim().startsWith('gantt')) {
       // Add necessary header for Gantt charts
@@ -85,6 +93,32 @@ class MermaidService {
     }
     
     return cleaned;
+  }
+  
+  // New method to optimize ZenUML syntax
+  optimizeZenUmlSyntax(zenUmlCode) {
+    // Don't modify if user has specified configuration params
+    if (zenUmlCode.includes('%%{init:')) {
+      return zenUmlCode;
+    }
+    
+    // Add initialization header for ZenUML with increased timeout
+    const configHeader = `%%{init: {
+  'plugin': {
+    'zenuml': {
+      'timeout': 5000,
+      'preInit': true
+    }
+  },
+  'themeVariables': {
+    'fontSize': 14,
+    'fontFamily': 'Arial, sans-serif'
+  },
+  'useMaxWidth': false,
+  'highResolution': true
+}}%%\n`;
+    
+    return configHeader + zenUmlCode;
   }
   
   // New method to optimize flowcharts for better resolution and wide charts
@@ -346,8 +380,12 @@ class MermaidService {
       const puppeteerConfigPath = path.resolve(__dirname, '../config/puppeteer-config.json');
       const mermaidConfigPath = path.resolve(__dirname, '../config/mermaid.config.json');
       
-      // Check if it's a Gantt chart or specific diagram type
+      // Check if it's a special diagram type that may need fallback rendering
       const isGanttChart = inputContent.trim().startsWith('gantt');
+      const isZenUML = inputContent.trim().startsWith('@startuml') || 
+                       inputContent.trim().match(/^zenuml\b/) || 
+                       inputContent.trim().match(/^sequenceDiagram\s+participant/) ||
+                       inputContent.trim().includes('ZenUML');
       
       // Build command with optimal dimensions and quality settings
       let command = `npx mmdc -i "${inputFile}" -o "${outputFile}" -w ${width} -H ${height} -p "${puppeteerConfigPath}" -c "${mermaidConfigPath}" --backgroundColor "#ffffff" --scale ${scale}`;
@@ -362,7 +400,14 @@ class MermaidService {
         const { stdout, stderr } = await execPromise(command, { timeout: 120000 }); // Higher timeout for complex diagrams
         
         if (stdout && !this.silent) this.logger.log(`Command output: ${stdout}`);
-        if (stderr && !this.silent) this.logger.error(`Command error: ${stderr}`);
+        if (stderr && !this.silent) {
+          this.logger.error(`Command error: ${stderr}`);
+          
+          // If we get a ZenUML-specific error, try the fallback method
+          if (stderr.includes('@zenuml') && isZenUML) {
+            return await this.renderZenUmlWithFallback(inputContent, outputFile, width, height, scale);
+          }
+        }
         
         // Check if the output file was created
         try {
@@ -376,9 +421,11 @@ class MermaidService {
             this.logger.error(`Output file not found: ${accessError.message}`);
           }
           
-          // If this is a Gantt chart and standard approach failed, try the fallback method
+          // If output file not found, try the appropriate fallback method
           if (isGanttChart) {
             return await this.renderGanttWithFallback(inputContent, outputFile, width, height, scale);
+          } else if (isZenUML) {
+            return await this.renderZenUmlWithFallback(inputContent, outputFile, width, height, scale);
           }
           
           return false;
@@ -388,9 +435,11 @@ class MermaidService {
           this.logger.error(`Command execution error: ${error.message}`);
         }
         
-        // If this is a Gantt chart and standard approach failed, try the fallback method
+        // If command fails, try the appropriate fallback method
         if (isGanttChart) {
           return await this.renderGanttWithFallback(inputContent, outputFile, width, height, scale);
+        } else if (isZenUML) {
+          return await this.renderZenUmlWithFallback(inputContent, outputFile, width, height, scale);
         }
         
         return false;
@@ -417,24 +466,24 @@ class MermaidService {
     }
   }
   
-  // Fallback method for rendering Gantt charts if the standard approach fails
-  async renderGanttWithFallback(ganttCode, outputFile, width, height, scale = 2) {
-    this.logger.log("Using fallback method for Gantt chart rendering");
+  // Specialized fallback method for rendering ZenUML diagrams
+  async renderZenUmlWithFallback(zenumlCode, outputFile, width, height, scale = 2) {
+    this.logger.log("Using fallback method for ZenUML diagram rendering");
     
     try {
-      // Create a simple HTML file with embedded mermaid
+      // Create a simple HTML file with embedded ZenUML
       const tempDir = path.dirname(outputFile);
       const htmlFileName = `${path.basename(outputFile, '.png')}.html`;
       const htmlFilePath = path.join(tempDir, htmlFileName);
       
-      // Use a simple but effective HTML content with embedded Gantt chart
+      // Use a more robust HTML template for ZenUML with longer timeout
       const htmlContent = `<!DOCTYPE html>
 <html>
 <head>
   <meta charset="UTF-8">
-  <title>Gantt Chart</title>
-  <!-- Load mermaid from CDN to ensure compatibility -->
-  <script src="https://cdn.jsdelivr.net/npm/mermaid@9.4.3/dist/mermaid.min.js"></script>
+  <title>ZenUML Diagram</title>
+  <!-- Load mermaid with ZenUML plugin from CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
   <style>
     body {
       margin: 0;
@@ -459,32 +508,61 @@ class MermaidService {
 <body>
   <div id="diagram">
     <div class="mermaid">
-${ganttCode}
+${zenumlCode}
     </div>
   </div>
   <script>
+    // Configure mermaid with longer timeout for ZenUML
     mermaid.initialize({
-      startOnLoad: true,
+      startOnLoad: false,
+      securityLevel: 'loose',
       theme: 'default',
-      gantt: {
-        axisFormat: '%Y-%m-%d',
-        fontSize: 14
+      plugin: {
+        loadZenuml: true,
+        zenuml: {
+          timeout: 7000,
+          preInit: true
+        }
+      },
+      themeVariables: {
+        fontSize: 14,
+        fontFamily: 'Arial, sans-serif'
       },
       useMaxWidth: false,
       highResolution: true
     });
+    
+    // Manually render with retry mechanism
+    function renderWithRetry(attempts = 3, delay = 1000) {
+      if (attempts <= 0) {
+        console.error("Failed to render diagram after multiple attempts");
+        return;
+      }
+      
+      try {
+        mermaid.init(undefined, document.querySelectorAll('.mermaid'));
+        console.log("Diagram rendering initiated");
+      } catch (error) {
+        console.error("Error during render attempt:", error);
+        setTimeout(() => renderWithRetry(attempts - 1, delay * 1.5), delay);
+      }
+    }
+    
+    // Start rendering after giving the store time to initialize
+    setTimeout(() => renderWithRetry(), 2000);
   </script>
 </body>
 </html>`;
       
       await fs.writeFile(htmlFilePath, htmlContent, 'utf8');
       
-      // Use puppeteer directly for more control over the rendering
+      // Use puppeteer with extended timeout for ZenUML rendering
       try {
         const puppeteer = require('puppeteer');
         const browser = await puppeteer.launch({
           headless: 'new',
-          args: ['--no-sandbox', '--disable-setuid-sandbox']
+          args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-web-security'],
+          timeout: 60000 // Extend browser launch timeout
         });
         
         const page = await browser.newPage();
@@ -494,14 +572,30 @@ ${ganttCode}
           deviceScaleFactor: scale // Use scale factor for high DPI rendering
         });
         
-        // Load the HTML file
-        await page.goto(`file://${htmlFilePath}`, { waitUntil: 'networkidle0' });
+        // Enable better error logging
+        page.on('console', msg => {
+          if (msg.type() === 'error' || msg.type() === 'warning') {
+            this.logger.debug(`Browser console ${msg.type()}: ${msg.text()}`);
+          }
+        });
         
-        // Wait for mermaid to render
-        await page.waitForSelector('.mermaid svg');
+        page.on('pageerror', err => {
+          this.logger.debug(`Browser page error: ${err.message}`);
+        });
         
-        // Wait a bit more to ensure everything is rendered
-        await page.waitForTimeout(1000);
+        // Load the HTML file with extended timeout
+        await page.goto(`file://${htmlFilePath}`, { 
+          waitUntil: 'networkidle2',
+          timeout: 30000 // 30 seconds timeout for page load
+        });
+        
+        // Wait longer for ZenUML to render
+        await page.waitForFunction(() => {
+          return document.querySelector('.mermaid svg') !== null;
+        }, { timeout: 15000 });
+        
+        // Wait extra time to ensure complete rendering
+        await page.waitForTimeout(3000);
         
         // Take screenshot with high quality settings
         await page.screenshot({ 
@@ -515,27 +609,68 @@ ${ganttCode}
         // Clean up
         await fs.unlink(htmlFilePath).catch(() => {});
         
-        this.logger.log(`Successfully generated Gantt chart using fallback method`);
+        this.logger.log(`Successfully generated ZenUML diagram using fallback method`);
         return true;
       } catch (puppeteerError) {
-        this.logger.error(`Puppeteer error: ${puppeteerError.message}`);
+        this.logger.error(`Puppeteer error with ZenUML: ${puppeteerError.message}`);
         
-        // Try with mmdc as a last resort
+        // Try with standard mermaid as a last resort
         try {
-          const simpleCommand = `npx mmdc -i "${htmlFilePath}" -o "${outputFile}" -w ${width} -H ${height} --backgroundColor "#ffffff" --scale ${scale}`;
+          // Modify the HTML to use standard sequence diagram syntax if possible
+          const fallbackHtml = htmlFilePath.replace('.html', '-fallback.html');
+          
+          // Try to convert to standard mermaid syntax if possible
+          let standardMermaid = zenumlCode;
+          if (zenumlCode.includes('@startuml')) {
+            standardMermaid = standardMermaid.replace('@startuml', 'sequenceDiagram');
+            standardMermaid = standardMermaid.replace('@enduml', '');
+          }
+          
+          const fallbackContent = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Fallback Diagram</title>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <style>
+    body { margin: 0; padding: 0; background: white; }
+    .mermaid { max-width: 100%; }
+  </style>
+</head>
+<body>
+  <div class="mermaid">
+${standardMermaid}
+  </div>
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'default',
+      logLevel: 'fatal',
+      securityLevel: 'loose'
+    });
+  </script>
+</body>
+</html>`;
+          
+          await fs.writeFile(fallbackHtml, fallbackContent);
+          
+          const simpleCommand = `npx mmdc -i "${fallbackHtml}" -o "${outputFile}" -w ${width} -H ${height} --backgroundColor "#ffffff"`;
           
           await execPromise(simpleCommand, { timeout: 60000 });
+          
+          // Clean up
+          await fs.unlink(fallbackHtml).catch(() => {});
           await fs.unlink(htmlFilePath).catch(() => {});
           
-          this.logger.log(`Successfully generated Gantt chart using mmdc with embedded HTML`);
+          this.logger.log(`Generated diagram using standard mermaid fallback`);
           return true;
         } catch (finalError) {
-          this.logger.error(`All Gantt fallback methods failed: ${finalError.message}`);
+          this.logger.error(`All ZenUML fallback methods failed: ${finalError.message}`);
           return false;
         }
       }
     } catch (error) {
-      this.logger.error(`Gantt fallback method failed: ${error.message}`);
+      this.logger.error(`ZenUML fallback method failed: ${error.message}`);
       return false;
     }
   }

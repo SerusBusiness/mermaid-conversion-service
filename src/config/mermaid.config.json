@@ -53,7 +53,10 @@
     "defaultRenderer": "dagre-wrapper"
   },
   "plugin": {
-    "loadZenuml": false
+    "loadZenuml": true,
+    "zenuml": {
+      "timeout": 5000
+    }
   },
   "er": {
     "diagramPadding": 20
