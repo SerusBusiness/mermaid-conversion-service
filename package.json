@@ -8,7 +8,11 @@
     "dev": "nodemon --watch src --inspect=0.0.0.0:9229 src/app.js",
     "dev:bun": "bun --watch src/app.js",
     "test": "jest",
-    "clear-cache": "node scripts/clear-cache.js"
+    "clear-cache": "node scripts/clear-cache.js",
+    "generate-images": "node scripts/generate-images.js",
+    "generate-images:clean": "node scripts/generate-images.js --clean",
+    "generate-images:custom": "node scripts/generate-images.js --input",
+    "generate-images:help": "node scripts/generate-images.js --help"
   },
   "dependencies": {
     "@mermaid-js/mermaid-cli": "^11.4.2",

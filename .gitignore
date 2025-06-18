@@ -36,3 +36,7 @@ coverage/
 # Bun specific
 .bun
 bun.lockb
+
+inputs/
+outputs/
+resources/

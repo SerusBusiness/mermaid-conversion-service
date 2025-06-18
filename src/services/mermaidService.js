@@ -106,7 +106,7 @@ class MermaidService {
     const configHeader = `%%{init: {
   'plugin': {
     'zenuml': {
-      'timeout': 5000,
+      'timeout': 10000, // Increased from 5000 to 10000
       'preInit': true
     }
   },
@@ -520,7 +520,7 @@ ${zenumlCode}
       plugin: {
         loadZenuml: true,
         zenuml: {
-          timeout: 7000,
+          timeout: 10000, // Increased timeout from 7000 to 10000
           preInit: true
         }
       },
@@ -533,7 +533,7 @@ ${zenumlCode}
     });
     
     // Manually render with retry mechanism
-    function renderWithRetry(attempts = 3, delay = 1000) {
+    function renderWithRetry(attempts = 5, delay = 1500) { // Increased attempts and initial delay
       if (attempts <= 0) {
         console.error("Failed to render diagram after multiple attempts");
         return;
@@ -549,7 +549,7 @@ ${zenumlCode}
     }
     
     // Start rendering after giving the store time to initialize
-    setTimeout(() => renderWithRetry(), 2000);
+    setTimeout(() => renderWithRetry(), 3000); // Increased from 2000 to 3000
   </script>
 </body>
 </html>`;
@@ -562,7 +562,7 @@ ${zenumlCode}
         const browser = await puppeteer.launch({
           headless: 'new',
           args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-web-security'],
-          timeout: 60000 // Extend browser launch timeout
+          timeout: 90000 // Extended from 60000 to 90000
         });
         
         const page = await browser.newPage();
@@ -586,16 +586,16 @@ ${zenumlCode}
         // Load the HTML file with extended timeout
         await page.goto(`file://${htmlFilePath}`, { 
           waitUntil: 'networkidle2',
-          timeout: 30000 // 30 seconds timeout for page load
+          timeout: 45000 // Increased from 30000 to 45000
         });
         
         // Wait longer for ZenUML to render
         await page.waitForFunction(() => {
           return document.querySelector('.mermaid svg') !== null;
-        }, { timeout: 15000 });
+        }, { timeout: 20000 }); // Increased from 15000 to 20000
         
         // Wait extra time to ensure complete rendering
-        await page.waitForTimeout(3000);
+        await page.waitForTimeout(5000); // Increased from 3000 to 5000
         
         // Take screenshot with high quality settings
         await page.screenshot({ 
@@ -671,6 +671,194 @@ ${standardMermaid}
       }
     } catch (error) {
       this.logger.error(`ZenUML fallback method failed: ${error.message}`);
+      return false;
+    }
+  }
+  
+  // Specialized fallback method for rendering Gantt diagrams
+  async renderGanttWithFallback(ganttCode, outputFile, width, height, scale = 2) {
+    this.logger.log("Using fallback method for Gantt chart rendering");
+    
+    try {
+      // Create a simple HTML file with embedded Gantt
+      const tempDir = path.dirname(outputFile);
+      const htmlFileName = `${path.basename(outputFile, '.png')}.html`;
+      const htmlFilePath = path.join(tempDir, htmlFileName);
+      
+      // Use a more robust HTML template for Gantt with proper configuration
+      const htmlContent = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Gantt Chart</title>
+  <!-- Load mermaid from CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      background: white;
+      width: ${width}px;
+      height: ${height}px;
+      overflow: hidden;
+    }
+    #diagram {
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .mermaid {
+      display: inline-block;
+      width: 100%;
+    }
+  </style>
+</head>
+<body>
+  <div id="diagram">
+    <div class="mermaid">
+${ganttCode}
+    </div>
+  </div>
+  <script>
+    // Configure mermaid with optimal settings for Gantt charts
+    mermaid.initialize({
+      startOnLoad: true,
+      securityLevel: 'loose',
+      theme: 'default',
+      gantt: {
+        titleTopMargin: 25,
+        barHeight: 20,
+        barGap: 4,
+        topPadding: 50,
+        sidePadding: 75,
+        gridLineStartPadding: 35,
+        fontSize: 12
+      },
+      themeVariables: {
+        fontSize: 14,
+        fontFamily: 'Arial, sans-serif'
+      },
+      useMaxWidth: false,
+      highResolution: true,
+      logLevel: 'error'
+    });
+  </script>
+</body>
+</html>`;
+      
+      await fs.writeFile(htmlFilePath, htmlContent, 'utf8');
+      
+      // Use puppeteer for rendering
+      try {
+        const puppeteer = require('puppeteer');
+        const browser = await puppeteer.launch({
+          headless: 'new',
+          args: ['--no-sandbox', '--disable-setuid-sandbox'],
+          timeout: 60000
+        });
+        
+        const page = await browser.newPage();
+        await page.setViewport({ 
+          width: Math.round(width), 
+          height: Math.round(height),
+          deviceScaleFactor: scale
+        });
+        
+        // Enable better error logging
+        page.on('console', msg => {
+          if (msg.type() === 'error' || msg.type() === 'warning') {
+            this.logger.debug(`Browser console ${msg.type()}: ${msg.text()}`);
+          }
+        });
+        
+        // Load the HTML file
+        await page.goto(`file://${htmlFilePath}`, { 
+          waitUntil: 'networkidle2',
+          timeout: 30000
+        });
+        
+        // Wait for Gantt chart to render
+        await page.waitForFunction(() => {
+          return document.querySelector('.mermaid svg') !== null;
+        }, { timeout: 15000 });
+        
+        // Wait extra time to ensure complete rendering
+        await page.waitForTimeout(2000);
+        
+        // Take screenshot
+        await page.screenshot({ 
+          path: outputFile, 
+          omitBackground: true,
+          quality: 100
+        });
+        
+        await browser.close();
+        
+        // Clean up
+        await fs.unlink(htmlFilePath).catch(() => {});
+        
+        this.logger.log(`Successfully generated Gantt chart using fallback method`);
+        return true;
+      } catch (puppeteerError) {
+        this.logger.error(`Puppeteer error with Gantt chart: ${puppeteerError.message}`);
+        
+        // Try with CLI as a last resort
+        try {
+          // Generate a simpler HTML file
+          const fallbackHtml = htmlFilePath.replace('.html', '-fallback.html');
+          const fallbackContent = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Fallback Gantt Chart</title>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <style>
+    body { margin: 0; padding: 0; background: white; }
+    .mermaid { max-width: 100%; }
+  </style>
+</head>
+<body>
+  <div class="mermaid">
+${ganttCode}
+  </div>
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'default',
+      logLevel: 'fatal',
+      securityLevel: 'loose',
+      gantt: {
+        barHeight: 20,
+        barGap: 4,
+        topPadding: 50,
+        sidePadding: 75
+      }
+    });
+  </script>
+</body>
+</html>`;
+          
+          await fs.writeFile(fallbackHtml, fallbackContent);
+          
+          const simpleCommand = `npx mmdc -i "${fallbackHtml}" -o "${outputFile}" -w ${width} -H ${height} --backgroundColor "#ffffff"`;
+          
+          await execPromise(simpleCommand, { timeout: 60000 });
+          
+          // Clean up
+          await fs.unlink(fallbackHtml).catch(() => {});
+          await fs.unlink(htmlFilePath).catch(() => {});
+          
+          this.logger.log(`Generated Gantt chart using CLI fallback`);
+          return true;
+        } catch (finalError) {
+          this.logger.error(`All Gantt chart fallback methods failed: ${finalError.message}`);
+          return false;
+        }
+      }
+    } catch (error) {
+      this.logger.error(`Gantt chart fallback method failed: ${error.message}`);
       return false;
     }
   }

@@ -62,7 +62,7 @@
     "diagramPadding": 20
   },
   "useMaxWidth": false,
-  "maxTextSize": 5000,
+  "maxTextSize": 50000,
   "deterministicIds": false,
   "highResolution": true,
   "renderOptimize": true,
